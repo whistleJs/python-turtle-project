@@ -1,259 +1,372 @@
 import turtle as t
 import random
+import time
 
-ITEM_LIST = (
-  # 투명효과 (봇 충돌 무시)
-  (['TRANSPARENT'] * 3) + 
-  # 시간 정지 (봇 일시 정지)
-  (['STOP'] * 4) + 
-  # 속도 증가 (유저 속도 증가)
-  (['SPEED_UP'] * 7) + 
-  # [디버프] 속도 감소 (유저 속도 감소)
-  (['SPEED_DOWN'] * 7) +
-  # [디버프] 방향키 전환
-  (['REVERSE'] * 4)
-)
-random.shuffle(ITEM_LIST)
-print(ITEM_LIST)
+SCREEN_SIZE = 500           # 화면 크기
+MAIN_SCREEN = t.Screen()    # 게임 화면
+MAIN_SCREEN.setup(SCREEN_SIZE, SCREEN_SIZE)
+MAIN_SCREEN._root.resizable(False, False)   # 전체 화면 막기
+MAIN_SCREEN.bgcolor('black')
+MAIN_SCREEN.tracer(0)
 
-playing = False
-score = 0
+MINIGAME_PATTERN_TYPE = ['Q', 'W', 'E', 'A', 'S', 'D']    # 미니게임 패턴 타입
+MINIGAME_LIMIT_TIME = 4                                   # 미니게임 제한 시간
 
-item = -1
-bonus_speed = 0
-stop_check = 0
+ITEM_TYPE = {
+  'SPEED_UP': '속도 증가',
+  'AI_STOP': '추격 일시정지',
+  'SPEED_DOWN': '속도 감소',
+  'REVERSE': '방향키 반전'
+}
 
-def get_random_pos():
-  return random.randint(-230, 230)
+# 게임 메시지 출력
+def show_game_message(title = None, content = None):
+  game_message.clear()
+  if title is not None:
+    game_message.goto(0, 30)
+    game_message.write(title, align='center', font=('', 36, 'bold'))
+  if content is not None:
+    game_message.goto(0, -30)
+    game_message.write(content, align='center', font=('', 16, 'bold'))
 
+# 화면 상태 변경
+def change_screen_style(minigame = False):
+  show_game_message()
+
+  for turtle in MINIGAME_TURTLE_LIST:
+    turtle.clear()
+
+  if minigame:
+    player.hideturtle()
+    bot.hideturtle()
+    point.hideturtle()
+    item.hideturtle()
+    score_message.clear()
+    minigame_message.clear()
+    MAIN_SCREEN.bgcolor('white')
+  else:
+    player.showturtle()
+    bot.showturtle()
+    point.showturtle()
+    item.showturtle()
+    update_score(score)
+    MAIN_SCREEN.bgcolor('black')
+
+  MAIN_SCREEN.update()
+
+# Turtle 생성
+def create_turtle(shape='turtle', color = 'white'):
+  turtle = t.Turtle()
+  turtle.hideturtle()
+  turtle.shape(shape)
+  turtle.color(color)
+  turtle.penup()
+  turtle.speed(0)
+
+  return turtle
+
+# Turtle 각도 조절
+def change_turtle_angle(turtle: t.Turtle, angle = 0):
+  if start_game_time is None: return
+  turtle.setheading(angle)
+
+# 랜덤 좌표 값 반환
+def get_random_position():
+  GAP = 20
+  return (
+    random.randint(-SCREEN_SIZE / 2 + GAP, SCREEN_SIZE / 2 - GAP),
+    random.randint(-SCREEN_SIZE / 2 + GAP, SCREEN_SIZE / 2 - GAP)
+  )
+
+# 화면 밖으로 나가는 경우 반대편으로 이동
+def check_leave_screen(turtle: t.Turtle):
+  [x, y] = turtle.pos()
+  if x < -SCREEN_SIZE / 2 + 15:
+    turtle.goto(SCREEN_SIZE / 2 - 15, y)
+  elif x > SCREEN_SIZE / 2 - 15:
+    turtle.goto(-SCREEN_SIZE / 2 + 15, y)
+  elif y < -SCREEN_SIZE / 2 + 15:
+    turtle.goto(x, SCREEN_SIZE / 2 - 15)
+  elif y > SCREEN_SIZE / 2 - 15:
+    turtle.goto(x, -SCREEN_SIZE / 2 + 15)
+
+# 난이도 값 반환
 def get_level():
-  if score < 3:
-    return 1
-  elif score < 10:
-    return 2
-  elif score < 25:
-    return 3
-  elif score < 50:
-    return 4
-  else:
-    return 5
-    
-def get_bot_chase_range():
-  level = get_level()
+  return 1
 
-  if level <= 2:
-    return 10
-  elif level == 3:
-    return 7
-  elif level == 4:
-    return 4
-  else:
-    return 2
-  
-def get_bot_speed():
-  level = get_level()
+# 점수 업데이트 처리
+def update_score(after_score):
+  global score
 
-  if level == 1:
-    return 2.5
-  elif level == 2:
-    return 3.6
-  elif level == 3:
-    return 4.3
-  else:
-    return 4.8
-  
-def get_user_speed():
-  level = get_level()
+  score = after_score
+  score_message.clear()
+  score_message.write(f'[Level {get_level()}] Score: {score}', align='center', font=('', 16))
 
-  if level == 1:
-    return 4
-  elif level == 2:
-    return 4.3
-  elif level == 3:
-    return 4.8
-  else:
-    return 5
+# 랜덤 아이템 반환
+def get_random_item(buff: bool):
+  global bonus_speed
+  global start_bot_timestop
+  global start_reverse_time
 
-message = t.Turtle()
-item_message = t.Turtle()
-bot = t.Turtle()
-point = t.Turtle()
-user = t.Turtle()
-item = t.Turtle()
-
-def turn_right():
-  if playing:
-    user.setheading(0)
-
-def turn_up():
-  if playing:
-    user.setheading(90)
-
-def turn_left():
-  if playing:
-    user.setheading(180)
-
-def turn_down():
-  if playing:
-    user.setheading(270)
-
-def show_item_message(item):
-  color = '#3623ff'
+  list = (['SPEED_UP'] * 7 + ['AI_STOP'] * 3) if buff else (['SPEED_DOWN'] * 7 + ['REVERSE'] * 3)
+  random.shuffle(list)
+  item = random.choice(list)
 
   if item == 'SPEED_UP':
-    content = 'Bonus Speed!'
-  elif item == 'STOP':
-    content = 'Time Stop!'
-  elif item == 'TRANSPARENT':
-    content = 'Invisible!'
+    bonus_speed = min(bonus_speed + 0.15, 1.5)
+  elif item == 'AI_STOP':
+    start_bot_timestop = time.time() + 2
   elif item == 'SPEED_DOWN':
-    content = 'Speed Down :('
-    color = '#ff5c5c'
+    bonus_speed = max(bonus_speed - 0.1, -0.5)
   elif item == 'REVERSE':
-    content = 'Reverse direction X('
-    color = '#ff5c5c'
+    start_reverse_time = time.time() + 2
 
-  item_message.color(color)
-  item_message.write(content, align='center', font=('', 12))
+  return item
 
-def show_message(title, content):
-  message.clear()
+# 미니게임 패턴 생성
+def create_minigame_pattern():
+  pattern_count = random.randint(6, 8)
+  gap = SCREEN_SIZE / pattern_count
 
-  if title != '':
-    message.goto(0, 100)
-    message.write(title, False, 'center', ('', 25))
+  for i in range(pattern_count):
+    turtle = MINIGAME_TURTLE_LIST[i]
+    pattern = random.choice(MINIGAME_PATTERN_TYPE)
 
-  if content != '':
-    message.goto(0, -100)
-    message.write(content, False, 'center', ('', 15))
+    turtle.color('black')
+    turtle.goto((gap * i + gap / 2) - SCREEN_SIZE / 2, 50)
+    turtle.write(pattern, align='center', font=('', 20, 'bold'))
 
-  message.home()
+    MINIGAME_TURTLE_LIST.append(turtle)
+    minigame_pattern_list.append(pattern)
 
-# Init Setting
-def init_setting():
-  bot.shape('turtle')
-  bot.color('#ff5c5c')
-  bot.speed(0)
-  bot.penup()
+# 미니게임 시작
+def minigame_start():
+  global start_minigame_time
 
-  point.shape('circle')
-  point.color('#ffa748')
-  point.speed(0)
-  point.penup()
+  change_screen_style(True)   # 미니게임 화면 전환
+  create_minigame_pattern()
 
-  user.shape('turtle')
-  user.color('#592ed9')
-  user.speed(0)
-  user.penup()
+  start_minigame_time = time.time()
 
-  message.color('white')
-  message.speed(0)
-  message.penup()
-  message.hideturtle()
+  minigame_scheduler()
 
-  item_message.speed(0)
-  item_message.penup()
-  item_message.hideturtle()
+# 미니게임 진행 스케줄러
+def minigame_scheduler():
+  minigame_message.clear()
 
-  item.shape('square')
-  item.color('#3623ff')
-  item.speed(0)
-  item.penup()
+  if start_minigame_time is None: return
 
-  t.setup(500, 500)
-  t.bgcolor('#44a4ff')
+  remain_time = max(0, round(MINIGAME_LIMIT_TIME - (time.time() - start_minigame_time), 1))
+  minigame_message.write(f'{remain_time}s', align='center', font=('', 16))
 
-  show_message('Turtle Run', '[Space]')
-
-  reset_setting()
-
-# Reset Setting
-def reset_setting():
-  global playing
-  global score
-  global bonus_speed
-  
-  point.goto(get_random_pos(), get_random_pos())
-  item.goto(get_random_pos(), get_random_pos())
-  user.goto(0, 200)
-  user.setheading(270)
-  bot.goto(0, 0)
-  bot.setheading(90)
-
-  playing = False
-  score = 0
-  bonus_speed = 0
-
-# Start Game
-def start_game():
-  global playing
-
-  if playing == False:
-    playing = True
-    message.clear()
-    play()
-
-# Play
-def play():
-  global playing
-  global score
-  # [Item Effect]
-  global bonus_speed
-  global stop_check
-
-  # [Level] Angle
-  if random.randint(1, get_bot_chase_range()) == 2:
-    bot.setheading(bot.towards(user.pos()))
-
-  # [Level] Speed
-  if stop_check == 0:
-    user.forward(get_user_speed() + bonus_speed)
-    bot.forward(get_bot_speed())
+  if remain_time <= 0:
+    minigame_over(False)
   else:
-    user.forward((get_user_speed() + bonus_speed) / 2)
-    stop_check += 1
-    if stop_check > 100:
-      stop_check = 0
+    MAIN_SCREEN.ontimer(minigame_scheduler, 50)
 
-  # [Check] Game Over
-  if user.distance(bot) < 12:
-    show_message(f'Game Over (Score: {score})', 'Again? [Space]')
+# 미니게임 키 이벤트 처리
+def minigame_process_key(key):
+  global minigame_success_count
+
+  if start_minigame_time is None: return
+  
+  pattern = minigame_pattern_list[minigame_success_count]
+  is_success = key is pattern
+
+  turtle = MINIGAME_TURTLE_LIST[minigame_success_count]
+  turtle.clear()
+  turtle.color('blue' if is_success else 'red')
+  turtle.write(pattern, align='center', font=('', 20, 'bold'))
+
+  if is_success:
+    minigame_success_count += 1
+  else:
+    minigame_over(False)
+    return
+
+  if minigame_success_count is len(minigame_pattern_list):
+    minigame_over(True)
+
+# 미니게임 종료
+def minigame_over(success: bool):
+  global start_minigame_time
+  global minigame_pattern_list
+  global minigame_success_count
+  
+  start_minigame_time = None
+  minigame_pattern_list= []
+  minigame_success_count = 0
+
+  item = get_random_item(success)
+
+  minigame_message.clear()
+  minigame_message.write(f'패턴 공략에 성공했습니다! ({ITEM_TYPE[item]})' if success else f'패턴 공략에 실패했습니다. ({ITEM_TYPE[item]})', align='center', font=('', 18, 'bold'))
+  MAIN_SCREEN.update()
+
+  time.sleep(1.5) # 메세지 보여주기 위해서 일시적으로 멈추기
+
+  change_screen_style()  # 터틀런 게임 화면 전환
+  MAIN_SCREEN.ontimer(game_scheduler, 500)
+
+# 게임 설정 초기화
+def reset_setting():
+  global score
+  global start_game_time
+
+  score = 0
+  start_game_time = time.time()
+
+  player.goto(0, 200)   # 게임 시작시 플레이어 상단으로 이동
+  player.setheading(-90)
+  bot.home()            # 게임 시작시 AI 가운데로 이동
+  bot.setheading(90)
+  point.goto(get_random_position())   # 게임 시작시 점수 랜덤 좌표로 이동
+  item.goto(get_random_position())    # 게임 시작시 아이템 랜덤 좌표로 이동
+
+  change_screen_style()
+
+# 게임 진행 스케줄러
+def game_scheduler():
+  player.forward(1.5 + bonus_speed)
+  check_leave_screen(player)
+
+  # AI 추격 및 화면 밖으로 가는 경우 반대편으로 이동
+  if (time.time() - start_bot_timestop < 1) is False:
+    bot.forward(1.3)
+    check_leave_screen(bot)
+
+    # 일정 확률로 AI 각도 돌리기
+    if random.randint(1, 20) == 2:
+      change_turtle_angle(bot, bot.towards(player.pos()))
+
+  # 게임 종료 조건
+  if player.distance(bot) < 18:
+    game_over()
+
+  # 점수 먹은 조건
+  if player.distance(point) < 16:
+    update_score(score + 1)
+    point.goto(get_random_position())
+
+  # 아이템 먹은 조건
+  if player.distance(item) < 14:
+    minigame_start()
+    item.goto(get_random_position())
+
+  MAIN_SCREEN.update()
+
+  if start_minigame_time is None and start_game_time is not None:
+    MAIN_SCREEN.ontimer(game_scheduler, 10)
+
+# 게임 시작
+def game_start():
+  if start_game_time is None:
     reset_setting()
+    game_scheduler()
 
-  # [Check] Point
-  if user.distance(point) < 12:
-    score += 1
-    point.goto(get_random_pos(), get_random_pos())
-    show_message('', f'[Level {get_level()}] score: {score}')
+# 게임 종료
+def game_over():
+  global start_game_time
 
-  # [Check] Item
-  if user.distance(item) < 12:
-    item.goto(get_random_pos(), get_random_pos())
-    item_message.clear()
-    item_message.goto(user.pos())
-    choice_item = random.choice(ITEM_LIST)
+  total_score = score * 60 + round(time.time() - start_game_time)
+  start_game_time = None
+  
+  score_message.clear()
+  show_game_message(f'점수: {total_score}', '재시작 - [space]')
 
-    if choice_item == 'SPEED_UP':
-      if bonus_speed < 0.5:
-       bonus_speed += 0.05
-    elif choice_item == 'STOP':
-      stop_check += 1
-    elif choice_item == 'SPEED_DOWN':
-      if bonus_speed > -0.3:
-       bonus_speed -= 0.025
+# 방향키(오른쪽) 이벤트 처리
+def on_keypress_right():
+  if (time.time() - start_reverse_time < 3):
+    change_turtle_angle(player, 180)
+  else:
+    change_turtle_angle(player, 0)
 
-    show_item_message(choice_item)
+# 방향키(위쪽) 이벤트 처리
+def on_keypress_up():
+  if (time.time() - start_reverse_time < 3):
+    change_turtle_angle(player, -90)
+  else:
+    change_turtle_angle(player, 90)
 
-  if playing:
-    t.ontimer(play, 10)
+# 방향키(왼쪽) 이벤트 처리
+def on_keypress_left():
+  if (time.time() - start_reverse_time < 3):
+    change_turtle_angle(player, 0)
+  else:
+    change_turtle_angle(player, 180)
 
-t.onkeypress(turn_right, 'Right')
-t.onkeypress(turn_up, 'Up')
-t.onkeypress(turn_left, 'Left')
-t.onkeypress(turn_down, 'Down')
-t.onkeypress(start_game, 'space')
+# 방향키(아래쪽) 이벤트 처리
+def on_keypress_down():
+  if (time.time() - start_reverse_time < 3):
+    change_turtle_angle(player, 90)
+  else:
+    change_turtle_angle(player, -90)
 
-init_setting()
+# 키(Q) 이벤트 처리
+def on_keypress_q():
+  minigame_process_key('Q')
 
-t.listen()
-t.mainloop()
+# 키(W) 이벤트 처리
+def on_keypress_w():
+  minigame_process_key('W')
+
+# 키(E) 이벤트 처리
+def on_keypress_e():
+  minigame_process_key('E')
+
+# 키(A) 이벤트 처리
+def on_keypress_a():
+  minigame_process_key('A')
+
+# 키(s) 이벤트 처리
+def on_keypress_s():
+  minigame_process_key('S')
+
+# 키(d) 이벤트 처리
+def on_keypress_d():
+  minigame_process_key('D')
+
+MINIGAME_TURTLE_LIST = list(map(lambda _: create_turtle(), range(8)))
+
+player = create_turtle()                                  # 플레이어
+bot = create_turtle(color='#ff5c5c')                      # AI
+point = create_turtle(shape='circle', color='#ffa748')    # 점수
+item = create_turtle(shape='square', color='#3623ff')     # 아이템
+
+game_message = create_turtle()                  # 게임 메시지
+minigame_message = create_turtle(color='black') # 미니게임 메시지
+minigame_message.goto(0, -50)                   # 미니게임 메시지 기본 위치 설정
+score_message = create_turtle()                 # 점수 메시지
+score_message.goto(0, -100)                     # 점수 메시지 기본 위치 설정
+status_message = create_turtle()                # 상태 메시지
+
+start_game_time = None        # 터틀런 게임 시작 시간
+start_minigame_time = None    # 미니게임 게임 시작 시간
+
+minigame_pattern_list = []    # 미니게임 패턴 리스트 (게임 진행시 생성)
+minigame_success_count = 0    # 미니게임 패턴 성공 횟수
+
+score = 0                     # 점수
+bonus_speed = 0               # 아이템 효과 - 플레이어 추가 속도
+start_bot_timestop = 0        # 아이템 효과 - AI 시간 정지
+start_reverse_time = 0        # 아이템 효과 - 방향키 반전
+
+# 터틀런 키 이벤트
+MAIN_SCREEN.onkeypress(on_keypress_right, 'Right')
+MAIN_SCREEN.onkeypress(on_keypress_up, 'Up')
+MAIN_SCREEN.onkeypress(on_keypress_left, 'Left')
+MAIN_SCREEN.onkeypress(on_keypress_down, 'Down')
+MAIN_SCREEN.onkeypress(game_start, 'space')
+
+# 미니게임 키 이벤트
+MAIN_SCREEN.onkeypress(on_keypress_q, 'q')
+MAIN_SCREEN.onkeypress(on_keypress_w, 'w')
+MAIN_SCREEN.onkeypress(on_keypress_e, 'e')
+MAIN_SCREEN.onkeypress(on_keypress_a, 'a')
+MAIN_SCREEN.onkeypress(on_keypress_s, 's')
+MAIN_SCREEN.onkeypress(on_keypress_d, 'd')
+
+show_game_message('Turtle Run', '시작 - [space]')
+
+MAIN_SCREEN.listen()
+MAIN_SCREEN.mainloop()
