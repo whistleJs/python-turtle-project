@@ -44,6 +44,20 @@ def get_level():
     return 4
   else:
     return 5
+  
+# 다음 레벨까지 남은 시간 계산
+def get_remain_time_next_level():
+  level = get_level()
+  playtime = get_play_time()
+
+  if level == 1:
+    return round(10 - playtime, 1)
+  elif level == 2:
+    return round(25 - playtime, 1)
+  elif level == 3:
+    return round(50 - playtime, 1)
+  elif level == 4:
+    return round(90 - playtime, 1)
 
 # 총합 점수 계산
 def get_total_score():
@@ -126,9 +140,15 @@ def update_status():
   remain_reverse_time = round(REVERSE_TIME - (time.time() - start_reverse_time), 1)
   if remain_reverse_time > 0 and remain_reverse_time < REVERSE_TIME:
     [x ,y] = player.pos()
-    status_message.color('#3623ff')
+    status_message.color('#274fff')
     status_message.goto(x + 2, y + 15)
-    status_message.write(f'{remain_reverse_time}s', align='center', font=('', 12))
+    status_message.write(f'{remain_reverse_time}s', align='center', font=('', 12, 'bold'))
+
+  # 레벨 증가 알림
+  remain_time_to_next_level = get_remain_time_next_level()
+  alert_message.clear()
+  if remain_time_to_next_level < 5:
+    alert_message.write(f'다음 레벨까지 {remain_time_to_next_level}s', align='center', font=('', 16, 'bold'))
 
 # 화면 상태 변경
 def change_screen_style(minigame = False):
@@ -264,7 +284,7 @@ def minigame_process_key(key):
 
   turtle = MINIGAME_TURTLE_LIST[minigame_success_count]
   turtle.clear()
-  turtle.color('blue' if is_success else 'red')
+  turtle.color('#274fff' if is_success else '#ff5c5c')
   turtle.write(pattern, align='center', font=('', 20, 'bold'))
 
   if is_success:
@@ -434,17 +454,23 @@ def on_keypress_s():
 def on_keypress_d():
   minigame_process_key('D')
 
+# 그 외 모든 키 입력 처리
+def on_keypress_other():
+  minigame_process_key(None)
+
 MINIGAME_TURTLE_LIST = list(map(lambda _: create_turtle(), range(8)))
 BOT_LIST = list(map(lambda _: create_turtle(color='#ff5c5c'), range(15)))
 
 player = create_turtle()                                  # 플레이어
 point = create_turtle(shape='circle', color='#ffa748')    # 점수
-item = create_turtle(shape='square', color='#3623ff')     # 아이템
+item = create_turtle(shape='square', color='#274fff')     # 아이템
 
 game_message = create_turtle()                  # 게임 메시지
 minigame_message = create_turtle(color='black') # 미니게임 메시지
 minigame_message.goto(0, -50)                   # 미니게임 메시지 기본 위치 설정
 status_message = create_turtle()                # 상태 메시지
+alert_message = create_turtle()
+alert_message.goto(0, -50)
 
 start_game_time = None        # 터틀런 게임 시작 시간
 start_minigame_time = None    # 미니게임 게임 시작 시간
@@ -472,6 +498,7 @@ MAIN_SCREEN.onkeypress(on_keypress_e, 'e')
 MAIN_SCREEN.onkeypress(on_keypress_a, 'a')
 MAIN_SCREEN.onkeypress(on_keypress_s, 's')
 MAIN_SCREEN.onkeypress(on_keypress_d, 'd')
+MAIN_SCREEN.onkeypress(on_keypress_other, '')
 
 show_game_message('Turtle Run', '시작 - [space]')
 
