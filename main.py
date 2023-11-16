@@ -17,7 +17,7 @@ MIN_BONUS_SPEED = -0.5        # 플레이어 최소 추가 속도
 INCREASE_SPEED = 0.15         # 플레이어 추가 속도 증가량
 DECREASE_SPEED = -0.1         # 플레이어 추가 속도 감소량
 BOT_STOP_TIME = 1.5     # AI가 멈추는 시간
-REVERSE_TIME = 5      # 방향키 반전 시간
+REVERSE_TIME = 5        # 방향키 반전 시간
 
 ITEM_TYPE = {
   'SPEED_UP': f'속도 +{INCREASE_SPEED}',
@@ -145,14 +145,16 @@ def update_status():
     status_message.write(f'{remain_reverse_time}s', align='center', font=('', 12, 'bold'))
 
   # 레벨 증가 알림
+  level = get_level()
   remain_time_to_next_level = get_remain_time_next_level()
   alert_message.clear()
-  if remain_time_to_next_level < 5:
+  if level < 5 and remain_time_to_next_level < 5:
     alert_message.write(f'다음 레벨까지 {remain_time_to_next_level}s', align='center', font=('', 16, 'bold'))
 
 # 화면 상태 변경
 def change_screen_style(minigame = False):
   game_message.clear()
+  minigame_message.clear()
   status_message.clear()
 
   for turtle in MINIGAME_TURTLE_LIST:
@@ -261,9 +263,8 @@ def minigame_start():
 
 # 미니게임 진행 스케줄러
 def minigame_scheduler():
-  minigame_message.clear()
-
   if start_minigame_time is None: return
+  minigame_message.clear()
 
   remain_time = max(0, round(get_minigame_limit_time() - (time.time() - start_minigame_time), 1))
   minigame_message.write(f'{remain_time}s', align='center', font=('', 16))
@@ -326,11 +327,15 @@ def reset_setting():
   global bonus_speed
   global start_game_time
   global acc_minigame_time
+  global start_bot_timestop
+  global start_reverse_time
 
   score = 0
   bonus_speed = 0
   start_game_time = time.time()
   acc_minigame_time = 0
+  start_bot_timestop = 0
+  start_reverse_time = 0
 
   for turtle in BOT_LIST: turtle.goto(get_random_position())
 
@@ -369,6 +374,9 @@ def game_scheduler():
   if player.distance(point) < 16:
     score += 1
     point.goto(get_random_position())
+    # 난이도 조절
+    if get_level() == 5:
+      minigame_start()
 
   # 아이템 먹은 조건
   if player.distance(item) < 14:
@@ -396,6 +404,7 @@ def game_over():
   for turtle in BOT_LIST: turtle.hideturtle()
   
   status_message.clear()
+  alert_message.clear()
   player.hideturtle()
   point.hideturtle()
   item.hideturtle()
