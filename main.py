@@ -11,7 +11,7 @@ MAIN_SCREEN.tracer(0)
 
 MINIGAME_PATTERN_TYPE = ['Q', 'W', 'E', 'A', 'S', 'D']    # 미니게임 패턴 타입
 
-DEFAULT_PLAYER_SPEED = 1.5    # 플레이어 기본 속도
+DEFAULT_PLAYER_SPEED = 2.5    # 플레이어 기본 속도
 MAX_BONUS_SPEED = 1.5         # 플레이어 최고 추가 속도
 MIN_BONUS_SPEED = -0.5        # 플레이어 최소 추가 속도
 INCREASE_SPEED = 0.15         # 플레이어 추가 속도 증가량
@@ -26,8 +26,23 @@ ITEM_TYPE = {
   'REVERSE': '방향키 반전'
 }
 
+MESSAGE_INFO = {
+  'GAME_START': [
+    { 'x': 0, 'y': 60, 'size': 32, 'message': 'Turtle Run' },
+    { 'x': 0, 'y': -20, 'size': 14, 'message': '게임 시작' },
+    { 'x': 0, 'y': -60, 'size': 14, 'message': '도움말' },
+    { 'x': 0, 'y': -100, 'size': 14, 'message': '종료' },
+  ],
+  'GAME_OVER': [
+    { 'x': 0, 'y': 60, 'size': 32, 'message': '점수: $total_score' },
+    { 'x': 0, 'y': -20, 'size': 14, 'message': '재시작' },
+    { 'x': 0, 'y': -60, 'size': 14, 'message': '종료' },
+  ]
+}
+
 # 플레이 시간 계산
 def get_play_time():
+  if start_game_time is None: return 0
   return round(time.time() - start_game_time - acc_minigame_time, 1)
 
 # 난이도 값 반환
@@ -109,23 +124,30 @@ def get_minigame_limit_time():
     return 2.5
 
 # 게임 메시지 출력
-def show_game_message(title = None, content = None):
+def show_game_message(type: str, total_score = None):
   game_message.clear()
-  if title is not None:
-    game_message.goto(0, 30)
-    game_message.write(title, align='center', font=('', 36, 'bold'))
-  if content is not None:
-    game_message.goto(0, -30)
-    game_message.write(content, align='center', font=('', 16, 'bold'))
+
+  for i in range(len(MESSAGE_INFO[type])):
+    row = MESSAGE_INFO[type][i]
+    message: str = row['message']
+    message = message.replace('$total_score', str(total_score))
+    
+    if i == menu + 1:
+      font = ('맑은 고딕', row['size'], 'underline')
+    else:
+      font = ('맑은 고딕', row['size'])
+    
+    game_message.goto(row['x'], row['y'])
+    game_message.write(message, align='center', font=font)
 
 # 게임 상태 정보 업데이트
 def update_status():
   status_message.clear()
   status_message.color('#4a4a4a')
   status_message.goto(0, SCREEN_SIZE / 2 - 30)
-  status_message.write(f'Level {get_level()} | 점수: {get_total_score()}', align='center', font=('', 14))
+  status_message.write(f'Level {get_level()} | 점수: {get_total_score()}', align='center', font=('맑은 고딕', 14))
   status_message.goto(0, SCREEN_SIZE / 2 - 50)
-  status_message.write(f'플레이어 속도: {get_player_speed()} | AI 속도: {get_bot_speed()} | AI 개수: {get_bot_count()}개', align='center', font=('', 14))
+  status_message.write(f'플레이어 속도: {get_player_speed()} | AI 속도: {get_bot_speed()} | AI 개수: {get_bot_count()}개', align='center', font=('맑은 고딕', 14))
 
   # AI 멈추는 시간 표시
   remain_bot_timestop = round(BOT_STOP_TIME - (time.time() - start_bot_timestop), 1)
@@ -134,7 +156,7 @@ def update_status():
       [x, y] = BOT_LIST[i].pos()
       status_message.color('#ff5c5c')
       status_message.goto(x + 2, y + 15)
-      status_message.write(f'{remain_bot_timestop}s', align='center', font=('', 12))
+      status_message.write(f'{remain_bot_timestop}s', align='center', font=('맑은 고딕', 12))
 
   # 방향키 반전 시간 표시
   remain_reverse_time = round(REVERSE_TIME - (time.time() - start_reverse_time), 1)
@@ -142,14 +164,14 @@ def update_status():
     [x ,y] = player.pos()
     status_message.color('#274fff')
     status_message.goto(x + 2, y + 15)
-    status_message.write(f'{remain_reverse_time}s', align='center', font=('', 12, 'bold'))
+    status_message.write(f'{remain_reverse_time}s', align='center', font=('맑은 고딕', 12, 'bold'))
 
   # 레벨 증가 알림
   level = get_level()
   remain_time_to_next_level = get_remain_time_next_level()
-  alert_message.clear()
+  time_message.clear()
   if level < 5 and remain_time_to_next_level < 5:
-    alert_message.write(f'다음 레벨까지 {remain_time_to_next_level}s', align='center', font=('', 16, 'bold'))
+    time_message.write(f'다음 레벨까지 {remain_time_to_next_level}s', align='center', font=('맑은 고딕', 16, 'bold'))
 
 # 화면 상태 변경
 def change_screen_style(minigame = False):
@@ -178,11 +200,10 @@ def change_screen_style(minigame = False):
   MAIN_SCREEN.update()
 
 # Turtle 생성
-def create_turtle(shape='turtle', color = 'white'):
-  turtle = t.Turtle()
-  turtle.hideturtle()
-  turtle.shape(shape)
+def create_turtle(shape='turtle', color='white', size=1):
+  turtle = t.Turtle(shape=shape, visible=False)
   turtle.color(color)
+  turtle.shapesize(1.0 * size, 1.0 * size, 1)
   turtle.penup()
   turtle.speed(0)
 
@@ -215,9 +236,7 @@ def check_leave_screen(turtle: t.Turtle):
 
 # 랜덤 아이템 반환
 def get_random_item(buff: bool):
-  global bonus_speed
-  global start_bot_timestop
-  global start_reverse_time
+  global bonus_speed, start_bot_timestop, start_reverse_time
 
   list = (['SPEED_UP'] * 7 + ['AI_STOP'] * 3) if buff else (['SPEED_DOWN'] * 7 + ['REVERSE'] * 3)
   random.shuffle(list)
@@ -245,7 +264,7 @@ def create_minigame_pattern():
 
     turtle.color('black')
     turtle.goto((gap * i + gap / 2) - SCREEN_SIZE / 2, 50)
-    turtle.write(pattern, align='center', font=('', 20, 'bold'))
+    turtle.write(pattern, align='center', font=('맑은 고딕', 20, 'bold'))
 
     MINIGAME_TURTLE_LIST.append(turtle)
     minigame_pattern_list.append(pattern)
@@ -267,7 +286,7 @@ def minigame_scheduler():
   minigame_message.clear()
 
   remain_time = max(0, round(get_minigame_limit_time() - (time.time() - start_minigame_time), 1))
-  minigame_message.write(f'{remain_time}s', align='center', font=('', 16))
+  minigame_message.write(f'{remain_time}s', align='center', font=('맑은 고딕', 16))
 
   if remain_time <= 0:
     minigame_over(False)
@@ -286,7 +305,7 @@ def minigame_process_key(key):
   turtle = MINIGAME_TURTLE_LIST[minigame_success_count]
   turtle.clear()
   turtle.color('#274fff' if is_success else '#ff5c5c')
-  turtle.write(pattern, align='center', font=('', 20, 'bold'))
+  turtle.write(pattern, align='center', font=('맑은 고딕', 20, 'bold'))
 
   if is_success:
     minigame_success_count += 1
@@ -299,10 +318,7 @@ def minigame_process_key(key):
 
 # 미니게임 종료
 def minigame_over(success: bool):
-  global start_minigame_time
-  global acc_minigame_time
-  global minigame_pattern_list
-  global minigame_success_count
+  global start_minigame_time, acc_minigame_time, minigame_pattern_list, minigame_success_count
 
   acc_minigame_time += round(time.time() - start_minigame_time, 1) + 2
   
@@ -313,7 +329,7 @@ def minigame_over(success: bool):
   item = get_random_item(success)
 
   minigame_message.clear()
-  minigame_message.write(f'패턴 공략에 성공했습니다! ({ITEM_TYPE[item]})' if success else f'패턴 공략에 실패했습니다. ({ITEM_TYPE[item]})', align='center', font=('', 18, 'bold'))
+  minigame_message.write(f'패턴 공략에 성공했습니다! ({ITEM_TYPE[item]})' if success else f'패턴 공략에 실패했습니다. ({ITEM_TYPE[item]})', align='center', font=('맑은 고딕', 18, 'bold'))
   MAIN_SCREEN.update()
 
   time.sleep(1.5) # 메세지 보여주기 위해서 일시적으로 멈추기
@@ -323,12 +339,7 @@ def minigame_over(success: bool):
 
 # 게임 설정 초기화
 def reset_setting():
-  global score
-  global bonus_speed
-  global start_game_time
-  global acc_minigame_time
-  global start_bot_timestop
-  global start_reverse_time
+  global score, bonus_speed, start_game_time, acc_minigame_time, start_bot_timestop, start_reverse_time
 
   score = 0
   bonus_speed = 0
@@ -404,11 +415,11 @@ def game_over():
   for turtle in BOT_LIST: turtle.hideturtle()
   
   status_message.clear()
-  alert_message.clear()
+  time_message.clear()
   player.hideturtle()
   point.hideturtle()
   item.hideturtle()
-  show_game_message(f'점수: {total_score}', '재시작 - [space]')
+  show_game_message('GAME_OVER', total_score = total_score)
   MAIN_SCREEN.update()
 
 # 방향키(오른쪽) 이벤트 처리
@@ -420,6 +431,12 @@ def on_keypress_right():
 
 # 방향키(위쪽) 이벤트 처리
 def on_keypress_up():
+  global menu
+
+  if start_game_time is None:
+    menu = min(menu - 1, 0)
+    show_game_message('GAME_START')
+
   if (time.time() - start_reverse_time < REVERSE_TIME):
     change_turtle_angle(player, -90)
   else:
@@ -434,6 +451,12 @@ def on_keypress_left():
 
 # 방향키(아래쪽) 이벤트 처리
 def on_keypress_down():
+  global menu
+
+  if start_game_time is None:
+    menu = min(menu + 1, 2)
+    show_game_message('GAME_START')
+
   if (time.time() - start_reverse_time < REVERSE_TIME):
     change_turtle_angle(player, 90)
   else:
@@ -476,10 +499,10 @@ item = create_turtle(shape='square', color='#274fff')     # 아이템
 
 game_message = create_turtle()                  # 게임 메시지
 minigame_message = create_turtle(color='black') # 미니게임 메시지
-minigame_message.goto(0, -50)                   # 미니게임 메시지 기본 위치 설정
+minigame_message.goto(0, -50)
 status_message = create_turtle()                # 상태 메시지
-alert_message = create_turtle()
-alert_message.goto(0, -50)
+time_message = create_turtle()                  # 시간 알림 메시지
+time_message.goto(0, -50)
 
 start_game_time = None        # 터틀런 게임 시작 시간
 start_minigame_time = None    # 미니게임 게임 시작 시간
@@ -488,6 +511,7 @@ acc_minigame_time = 0         # 총합 미니게임 플레이 시간
 minigame_pattern_list = []    # 미니게임 패턴 리스트 (게임 진행시 생성)
 minigame_success_count = 0    # 미니게임 패턴 성공 횟수
 
+menu = 0                      # 선택 메뉴
 score = 0                     # 점수
 bonus_speed = 0               # 아이템 효과 - 플레이어 추가 속도
 start_bot_timestop = 0        # 아이템 효과 - AI 시간 정지
@@ -509,7 +533,7 @@ MAIN_SCREEN.onkeypress(on_keypress_s, 's')
 MAIN_SCREEN.onkeypress(on_keypress_d, 'd')
 MAIN_SCREEN.onkeypress(on_keypress_other, '')
 
-show_game_message('Turtle Run', '시작 - [space]')
+show_game_message('GAME_START')
 
 MAIN_SCREEN.listen()
 MAIN_SCREEN.mainloop()
