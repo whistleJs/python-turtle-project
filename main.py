@@ -6,12 +6,16 @@ SCREEN_SIZE = 500           # 화면 크기
 MAIN_SCREEN = t.Screen()    # 게임 화면
 MAIN_SCREEN.setup(SCREEN_SIZE, SCREEN_SIZE)
 MAIN_SCREEN._root.resizable(False, False)   # 전체 화면 막기
+MAIN_SCREEN.register_shape('potion.gif')
+MAIN_SCREEN.register_shape('bot.gif')
+MAIN_SCREEN.register_shape('turtle.gif')
+MAIN_SCREEN.register_shape('point.gif')
 MAIN_SCREEN.bgcolor('black')
 MAIN_SCREEN.tracer(0)
 
 MINIGAME_PATTERN_TYPE = ['Q', 'W', 'E', 'A', 'S', 'D']    # 미니게임 패턴 타입
 
-DEFAULT_PLAYER_SPEED = 2.5    # 플레이어 기본 속도
+DEFAULT_PLAYER_SPEED = 2      # 플레이어 기본 속도
 MAX_BONUS_SPEED = 1.5         # 플레이어 최고 추가 속도
 MIN_BONUS_SPEED = -0.5        # 플레이어 최소 추가 속도
 INCREASE_SPEED = 0.15         # 플레이어 추가 속도 증가량
@@ -35,10 +39,25 @@ MESSAGE_INFO = {
   ],
   'GAME_OVER': [
     { 'x': 0, 'y': 60, 'size': 32, 'message': '점수: $total_score' },
-    { 'x': 0, 'y': -20, 'size': 14, 'message': '재시작' },
-    { 'x': 0, 'y': -60, 'size': 14, 'message': '종료' },
+    { 'x': 0, 'y': -20, 'size': 14, 'message': '게임 재시작' },
+    { 'x': 0, 'y': -60, 'size': 14, 'message': '도움말' },
+    { 'x': 0, 'y': -100, 'size': 14, 'message': '종료' },
+  ],
+  'HELP': [
+    { 'x': 0, 'y': 180, 'size': 24, 'message': '도움말' },
+    { 'x': 0, 'y': -200, 'size': 16, 'message': '게임 시작' },
+    { 'x': -180, 'y': 140, 'size': 14, 'align': 'left', 'message': '[플레이어]: 방향키(상하좌우)를 통해 방향을 전환할 수 있습니다.' },
+    { 'x': -180, 'y': 90, 'size': 14, 'align': 'left', 'message': '[점수]: 점수가 추가로 증가합니다.' },
+    { 'x': -180, 'y': 40, 'size': 14, 'align': 'left', 'message': '[아이템]: 패턴이 발동되면 성공하면 버프, 실패하면 디버프가 발생합니다.' },
+    { 'x': -180, 'y': -10, 'size': 14, 'align': 'left', 'message': '[패턴]: 제한 시간 안에 제시하는 키워드를 입력해야합니다.' },
+    { 'x': -180, 'y': -60, 'size': 14, 'align': 'left', 'message': '[AI]: 레벨에 따라 속도가 상승하며 개수가 증가합니다.' },
+    { 'x': -180, 'y': -100, 'size': 14, 'align': 'left', 'message': '[레벨]: 1부터 시작하여 최대 5단계까지 있으며' },
+    { 'x': -140, 'y': -120, 'size': 14, 'align': 'left', 'message': '최대 단계 도달 시 점수를 먹었을 때도 패턴이 발동됩니다.' },
   ]
 }
+
+VIEW_TYPE = 'GAME_START'
+PREV_TOTAL_SCORE = 0
 
 # 플레이 시간 계산
 def get_play_time():
@@ -124,13 +143,28 @@ def get_minigame_limit_time():
     return 2.5
 
 # 게임 메시지 출력
-def show_game_message(type: str, total_score = None):
+def show_game_message():
   game_message.clear()
 
-  for i in range(len(MESSAGE_INFO[type])):
-    row = MESSAGE_INFO[type][i]
+  if VIEW_TYPE == 'HELP':
+    player_sample.showturtle()
+    point_sample.showturtle()
+    item_sample.showturtle()
+    bot_sample.showturtle()
+  else:
+    player_sample.hideturtle()
+    point_sample.hideturtle()
+    item_sample.hideturtle()
+    bot_sample.hideturtle()
+
+  for i in range(len(MESSAGE_INFO[VIEW_TYPE])):
+    row = MESSAGE_INFO[VIEW_TYPE][i]
+    align = row.get('align')
     message: str = row['message']
-    message = message.replace('$total_score', str(total_score))
+    message = message.replace('$total_score', str(PREV_TOTAL_SCORE))
+
+    if align is None:
+      align = 'center'
     
     if i == menu + 1:
       font = ('맑은 고딕', row['size'], 'underline')
@@ -138,16 +172,21 @@ def show_game_message(type: str, total_score = None):
       font = ('맑은 고딕', row['size'])
     
     game_message.goto(row['x'], row['y'])
-    game_message.write(message, align='center', font=font)
+    game_message.write(message, align=align, font=font)
+
+  MAIN_SCREEN.update()
 
 # 게임 상태 정보 업데이트
 def update_status():
   status_message.clear()
   status_message.color('#4a4a4a')
+  # 상단 1번째 줄
   status_message.goto(0, SCREEN_SIZE / 2 - 30)
   status_message.write(f'Level {get_level()} | 점수: {get_total_score()}', align='center', font=('맑은 고딕', 14))
+  # 상단 2번째 줄
+  is_max_speed = bonus_speed == MAX_BONUS_SPEED
   status_message.goto(0, SCREEN_SIZE / 2 - 50)
-  status_message.write(f'플레이어 속도: {get_player_speed()} | AI 속도: {get_bot_speed()} | AI 개수: {get_bot_count()}개', align='center', font=('맑은 고딕', 14))
+  status_message.write(f'플레이어 속도: {get_player_speed()}{" (최대 속도)" if is_max_speed else ""} | AI 속도: {get_bot_speed()} | AI 개수: {get_bot_count()}개', align='center', font=('맑은 고딕', 14))
 
   # AI 멈추는 시간 표시
   remain_bot_timestop = round(BOT_STOP_TIME - (time.time() - start_bot_timestop), 1)
@@ -355,6 +394,10 @@ def reset_setting():
   point.goto(get_random_position())   # 게임 시작시 점수 랜덤 좌표로 이동
   item.goto(get_random_position())    # 게임 시작시 아이템 랜덤 좌표로 이동
 
+  player_sample.hideturtle()
+  point_sample.hideturtle()
+  item_sample.hideturtle()
+  bot_sample.hideturtle()
   change_screen_style()
 
 # 게임 진행 스케줄러
@@ -390,7 +433,7 @@ def game_scheduler():
       minigame_start()
 
   # 아이템 먹은 조건
-  if player.distance(item) < 14:
+  if player.distance(item) < 20:
     minigame_start()
     item.goto(get_random_position())
 
@@ -401,15 +444,18 @@ def game_scheduler():
 
 # 게임 시작
 def game_start():
+  global VIEW_TYPE
+
   if start_game_time is None:
+    VIEW_TYPE = 'GAME_OVER'
     reset_setting()
     game_scheduler()
 
 # 게임 종료
 def game_over():
-  global start_game_time
+  global PREV_TOTAL_SCORE, start_game_time
 
-  total_score = get_total_score()
+  PREV_TOTAL_SCORE = get_total_score()
   start_game_time = None
 
   for turtle in BOT_LIST: turtle.hideturtle()
@@ -419,7 +465,7 @@ def game_over():
   player.hideturtle()
   point.hideturtle()
   item.hideturtle()
-  show_game_message('GAME_OVER', total_score = total_score)
+  show_game_message()
   MAIN_SCREEN.update()
 
 # 방향키(오른쪽) 이벤트 처리
@@ -433,9 +479,9 @@ def on_keypress_right():
 def on_keypress_up():
   global menu
 
-  if start_game_time is None:
-    menu = min(menu - 1, 0)
-    show_game_message('GAME_START')
+  if start_game_time is None and (VIEW_TYPE == 'GAME_START' or VIEW_TYPE == 'GAME_OVER'):
+    menu = max(menu - 1, 0)
+    show_game_message()
 
   if (time.time() - start_reverse_time < REVERSE_TIME):
     change_turtle_angle(player, -90)
@@ -453,14 +499,27 @@ def on_keypress_left():
 def on_keypress_down():
   global menu
 
-  if start_game_time is None:
+  if start_game_time is None and (VIEW_TYPE == 'GAME_START' or VIEW_TYPE == 'GAME_OVER'):
     menu = min(menu + 1, 2)
-    show_game_message('GAME_START')
+    show_game_message()
 
   if (time.time() - start_reverse_time < REVERSE_TIME):
     change_turtle_angle(player, 90)
   else:
     change_turtle_angle(player, -90)
+
+# 키(space) 이벤트 처리
+def on_keypress_space():
+  global VIEW_TYPE, menu
+
+  if menu == 0:
+    game_start()
+  elif menu == 1:
+    VIEW_TYPE = 'HELP'
+    menu = 0
+    show_game_message()
+  elif menu == 2:
+    t.bye()
 
 # 키(Q) 이벤트 처리
 def on_keypress_q():
@@ -491,11 +550,20 @@ def on_keypress_other():
   minigame_process_key(None)
 
 MINIGAME_TURTLE_LIST = list(map(lambda _: create_turtle(), range(8)))
-BOT_LIST = list(map(lambda _: create_turtle(color='#ff5c5c'), range(15)))
+BOT_LIST = list(map(lambda _: create_turtle(shape='bot.gif'), range(15)))
 
-player = create_turtle()                                  # 플레이어
-point = create_turtle(shape='circle', color='#ffa748')    # 점수
-item = create_turtle(shape='square', color='#274fff')     # 아이템
+player = create_turtle(shape='turtle.gif')    # 플레이어
+point = create_turtle(shape='point.gif')      # 점수
+item = create_turtle(shape='potion.gif')      # 아이템
+
+player_sample = create_turtle(shape='turtle.gif')    # 플레이어 도움말용
+player_sample.goto(-210, 150)
+point_sample = create_turtle(shape='point.gif')      # 점수 도움말용
+point_sample.goto(-210, 100)
+item_sample = create_turtle(shape='potion.gif')      # 아이템 도움말용
+item_sample.goto(-210, 50)
+bot_sample = create_turtle(shape='bot.gif')          # AI 도움말용
+bot_sample.goto(-210, -50)
 
 game_message = create_turtle()                  # 게임 메시지
 minigame_message = create_turtle(color='black') # 미니게임 메시지
@@ -522,7 +590,7 @@ MAIN_SCREEN.onkeypress(on_keypress_right, 'Right')
 MAIN_SCREEN.onkeypress(on_keypress_up, 'Up')
 MAIN_SCREEN.onkeypress(on_keypress_left, 'Left')
 MAIN_SCREEN.onkeypress(on_keypress_down, 'Down')
-MAIN_SCREEN.onkeypress(game_start, 'space')
+MAIN_SCREEN.onkeypress(on_keypress_space, 'space')
 
 # 미니게임 키 이벤트
 MAIN_SCREEN.onkeypress(on_keypress_q, 'q')
@@ -533,7 +601,7 @@ MAIN_SCREEN.onkeypress(on_keypress_s, 's')
 MAIN_SCREEN.onkeypress(on_keypress_d, 'd')
 MAIN_SCREEN.onkeypress(on_keypress_other, '')
 
-show_game_message('GAME_START')
+show_game_message()
 
 MAIN_SCREEN.listen()
 MAIN_SCREEN.mainloop()
