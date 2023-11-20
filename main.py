@@ -23,6 +23,7 @@ DECREASE_SPEED = -0.1         # 플레이어 추가 속도 감소량
 BOT_STOP_TIME = 1.5     # AI가 멈추는 시간
 REVERSE_TIME = 5        # 방향키 반전 시간
 
+# 아이템 타입 정리
 ITEM_TYPE = {
   'SPEED_UP': f'속도 +{INCREASE_SPEED}',
   'AI_STOP': 'AI 일시정지',
@@ -30,6 +31,7 @@ ITEM_TYPE = {
   'REVERSE': '방향키 반전'
 }
 
+# 화면 메시지 정보
 MESSAGE_INFO = {
   'GAME_START': [
     { 'x': 0, 'y': 60, 'size': 32, 'message': 'Turtle Run' },
@@ -55,9 +57,6 @@ MESSAGE_INFO = {
     { 'x': -140, 'y': -120, 'size': 14, 'align': 'left', 'message': '최대 단계 도달 시 점수를 먹었을 때도 패턴이 발동됩니다.' },
   ]
 }
-
-VIEW_TYPE = 'GAME_START'
-PREV_TOTAL_SCORE = 0
 
 # 플레이 시간 계산
 def get_play_time():
@@ -99,7 +98,10 @@ def get_total_score():
 
 # 플레이어 속도 계산
 def get_player_speed():
-  return round(max(DEFAULT_PLAYER_SPEED + MIN_BONUS_SPEED, min(DEFAULT_PLAYER_SPEED + bonus_speed, DEFAULT_PLAYER_SPEED + MAX_BONUS_SPEED)), 2) # 최소 1, 최대 3
+  return round(
+    max(DEFAULT_PLAYER_SPEED + MIN_BONUS_SPEED,
+      min(DEFAULT_PLAYER_SPEED + bonus_speed,
+          DEFAULT_PLAYER_SPEED + MAX_BONUS_SPEED)), 2) # 최소 1, 최대 3
 
 # AI 속도 계산
 def get_bot_speed():
@@ -146,7 +148,7 @@ def get_minigame_limit_time():
 def show_game_message():
   game_message.clear()
 
-  if VIEW_TYPE == 'HELP':
+  if view_type == 'HELP':
     player_sample.showturtle()
     point_sample.showturtle()
     item_sample.showturtle()
@@ -157,11 +159,11 @@ def show_game_message():
     item_sample.hideturtle()
     bot_sample.hideturtle()
 
-  for i in range(len(MESSAGE_INFO[VIEW_TYPE])):
-    row = MESSAGE_INFO[VIEW_TYPE][i]
+  for i in range(len(MESSAGE_INFO[view_type])):
+    row = MESSAGE_INFO[view_type][i]
     align = row.get('align')
     message: str = row['message']
-    message = message.replace('$total_score', str(PREV_TOTAL_SCORE))
+    message = message.replace('$total_score', str(prev_total_score))
 
     if align is None:
       align = 'center'
@@ -181,12 +183,16 @@ def update_status():
   status_message.clear()
   status_message.color('#4a4a4a')
   # 상단 1번째 줄
+  first_line_message = f'Level {get_level()} | 점수: {get_total_score()}'
   status_message.goto(0, SCREEN_SIZE / 2 - 30)
-  status_message.write(f'Level {get_level()} | 점수: {get_total_score()}', align='center', font=('맑은 고딕', 14))
+  status_message.write(first_line_message, align='center', font=('맑은 고딕', 14))
   # 상단 2번째 줄
-  is_max_speed = bonus_speed == MAX_BONUS_SPEED
+  second_line_message = f'플레이어 속도: {get_player_speed()}'
+  if bonus_speed == MAX_BONUS_SPEED:
+    second_line_message += '(최대 속도)'
+  second_line_message += f' | AI 속도: {get_bot_speed()} | AI 개수: {get_bot_count()}개'
   status_message.goto(0, SCREEN_SIZE / 2 - 50)
-  status_message.write(f'플레이어 속도: {get_player_speed()}{" (최대 속도)" if is_max_speed else ""} | AI 속도: {get_bot_speed()} | AI 개수: {get_bot_count()}개', align='center', font=('맑은 고딕', 14))
+  status_message.write(second_line_message, align='center', font=('맑은 고딕', 14))
 
   # AI 멈추는 시간 표시
   remain_bot_timestop = round(BOT_STOP_TIME - (time.time() - start_bot_timestop), 1)
@@ -444,18 +450,18 @@ def game_scheduler():
 
 # 게임 시작
 def game_start():
-  global VIEW_TYPE
+  global view_type
 
   if start_game_time is None:
-    VIEW_TYPE = 'GAME_OVER'
+    view_type = 'GAME_OVER'
     reset_setting()
     game_scheduler()
 
 # 게임 종료
 def game_over():
-  global PREV_TOTAL_SCORE, start_game_time
+  global prev_total_score, start_game_time
 
-  PREV_TOTAL_SCORE = get_total_score()
+  prev_total_score = get_total_score()
   start_game_time = None
 
   for turtle in BOT_LIST: turtle.hideturtle()
@@ -479,7 +485,7 @@ def on_keypress_right():
 def on_keypress_up():
   global menu
 
-  if start_game_time is None and (VIEW_TYPE == 'GAME_START' or VIEW_TYPE == 'GAME_OVER'):
+  if start_game_time is None and (view_type == 'GAME_START' or view_type == 'GAME_OVER'):
     menu = max(menu - 1, 0)
     show_game_message()
 
@@ -499,7 +505,7 @@ def on_keypress_left():
 def on_keypress_down():
   global menu
 
-  if start_game_time is None and (VIEW_TYPE == 'GAME_START' or VIEW_TYPE == 'GAME_OVER'):
+  if start_game_time is None and (view_type == 'GAME_START' or view_type == 'GAME_OVER'):
     menu = min(menu + 1, 2)
     show_game_message()
 
@@ -510,12 +516,12 @@ def on_keypress_down():
 
 # 키(space) 이벤트 처리
 def on_keypress_space():
-  global VIEW_TYPE, menu
+  global view_type, menu
 
   if menu == 0:
     game_start()
   elif menu == 1:
-    VIEW_TYPE = 'HELP'
+    view_type = 'HELP'
     menu = 0
     show_game_message()
   elif menu == 2:
@@ -549,41 +555,48 @@ def on_keypress_d():
 def on_keypress_other():
   minigame_process_key(None)
 
+# 미니게임 터틀 모음
 MINIGAME_TURTLE_LIST = list(map(lambda _: create_turtle(), range(8)))
+# AI 터틀 모음
 BOT_LIST = list(map(lambda _: create_turtle(shape='bot.gif'), range(15)))
 
 player = create_turtle(shape='turtle.gif')    # 플레이어
 point = create_turtle(shape='point.gif')      # 점수
 item = create_turtle(shape='potion.gif')      # 아이템
 
-player_sample = create_turtle(shape='turtle.gif')    # 플레이어 도움말용
-player_sample.goto(-210, 150)
-point_sample = create_turtle(shape='point.gif')      # 점수 도움말용
-point_sample.goto(-210, 100)
-item_sample = create_turtle(shape='potion.gif')      # 아이템 도움말용
-item_sample.goto(-210, 50)
-bot_sample = create_turtle(shape='bot.gif')          # AI 도움말용
-bot_sample.goto(-210, -50)
+player_sample = create_turtle(shape='turtle.gif')    # 도움말용 플레이어
+point_sample = create_turtle(shape='point.gif')      # 도움말용 점수
+item_sample = create_turtle(shape='potion.gif')      # 도움말용 아이템
+bot_sample = create_turtle(shape='bot.gif')          # 도움말용 AI
 
-game_message = create_turtle()                  # 게임 메시지
-minigame_message = create_turtle(color='black') # 미니게임 메시지
+game_message = create_turtle()                    # 게임 메시지
+minigame_message = create_turtle(color='black')   # 미니게임 메시지
+status_message = create_turtle()                  # 상태 메시지
+time_message = create_turtle()                    # 시간 알림 메시지
+
+# 최초 생성 시 이동 (이동 필요 없음)
+player_sample.goto(-210, 150)
+point_sample.goto(-210, 100)
+item_sample.goto(-210, 50)
+bot_sample.goto(-210, -50)
 minigame_message.goto(0, -50)
-status_message = create_turtle()                # 상태 메시지
-time_message = create_turtle()                  # 시간 알림 메시지
 time_message.goto(0, -50)
 
 start_game_time = None        # 터틀런 게임 시작 시간
 start_minigame_time = None    # 미니게임 게임 시작 시간
-acc_minigame_time = 0         # 총합 미니게임 플레이 시간
+acc_minigame_time = 0         # 누적 미니게임 플레이 시간
 
 minigame_pattern_list = []    # 미니게임 패턴 리스트 (게임 진행시 생성)
 minigame_success_count = 0    # 미니게임 패턴 성공 횟수
 
-menu = 0                      # 선택 메뉴
-score = 0                     # 점수
-bonus_speed = 0               # 아이템 효과 - 플레이어 추가 속도
-start_bot_timestop = 0        # 아이템 효과 - AI 시간 정지
-start_reverse_time = 0        # 아이템 효과 - 방향키 반전
+menu = 0                  # 선택 메뉴
+score = 0                 # 점수
+bonus_speed = 0           # 아이템 효과 - 플레이어 추가 속도
+start_bot_timestop = 0    # 아이템 효과 - AI 시간 정지
+start_reverse_time = 0    # 아이템 효과 - 방향키 반전
+
+view_type = 'GAME_START'    # 화면 메시지 타입
+prev_total_score = 0        # 이전 최종 점수
 
 # 터틀런 키 이벤트
 MAIN_SCREEN.onkeypress(on_keypress_right, 'Right')
